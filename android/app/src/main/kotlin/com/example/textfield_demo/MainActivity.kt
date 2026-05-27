@@ -3,6 +3,8 @@ package com.example.textfield_demo
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
+import android.telephony.TelephonyManager
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -12,15 +14,25 @@ import java.net.URL
 
 class MainActivity : FlutterActivity() {
 
-    private val CHANNEL = "com.example.textfield_demo/bandwidth"
-    private val TAG = "BandwidthChecker"
+    private val BANDWIDTH_CHANNEL = "com.example.textfield_demo/bandwidth"
+    private val SIGNAL_CHANNEL = "com.example.textfield_demo/signal"
+    private val TAG = "NativeChannels"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        setupBandwidthChannel(flutterEngine)
+        setupSignalChannel(flutterEngine)
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // BANDWIDTH CHANNEL
+    // ─────────────────────────────────────────────────────────────
+
+    private fun setupBandwidthChannel(flutterEngine: FlutterEngine) {
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
-            CHANNEL
+            BANDWIDTH_CHANNEL
         ).setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
@@ -41,9 +53,48 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             } catch (e: Throwable) {
-                Log.e(TAG, "MethodChannel handler error: ${e.message}")
+                Log.e(TAG, "Bandwidth handler error: ${e.message}")
                 result.success(null)
             }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // SIGNAL STRENGTH CHANNEL
+    // ─────────────────────────────────────────────────────────────
+
+    private fun setupSignalChannel(flutterEngine: FlutterEngine) {
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            SIGNAL_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            try {
+                when (call.method) {
+                    "getSignalStrength" -> result.success(getSignalLevel())
+                    else -> result.notImplemented()
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "Signal handler error: ${e.message}")
+                result.success(null)
+            }
+        }
+    }
+
+    /**
+     * Returns the overall signal level (0..4) via TelephonyManager (API 28+),
+     * or null if unavailable.
+     */
+    private fun getSignalLevel(): Int? {
+        return try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+
+            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+                ?: return null
+
+            tm.signalStrength?.level  // 0..4 or null
+        } catch (e: Throwable) {
+            Log.e(TAG, "getSignalLevel failed: ${e.message}")
+            null
         }
     }
 

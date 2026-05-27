@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:textfield_demo/bandwidth_checker.dart';
 
 import 'accessible_search_field.dart';
+import 'nominee_screen.dart';
+import 'signal_strength_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -117,6 +119,32 @@ class _SearchDemoPageState extends State<SearchDemoPage> {
                   );
                 },
                 child: const Text('Check Bandwidth'),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SignalStrengthScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.signal_cellular_alt),
+                label: const Text('Signal Strength'),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const NomineeScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.people_alt_outlined),
+                label: const Text('Manage Nominees'),
               ),
             ],
           ),
