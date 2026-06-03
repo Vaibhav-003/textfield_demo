@@ -14,10 +14,17 @@ class _SignalStrengthScreenState extends State<SignalStrengthScreen> {
 
   Future<void> _fetchSignal() async {
     setState(() => _isLoading = true);
-    final level = await SignalChecker.instance.check();
+    final info = await SignalChecker.instance.check();
     setState(() {
       _isLoading = false;
-      _readings.insert(0, _SignalReading(level: level, time: DateTime.now()));
+      _readings.insert(
+        0,
+        _SignalReading(
+          connectionType: info?.connectionType,
+          level: info?.signalStrength,
+          time: DateTime.now(),
+        ),
+      );
     });
   }
 
@@ -78,6 +85,10 @@ class _SignalStrengthScreenState extends State<SignalStrengthScreen> {
                     '${r.time.minute.toString().padLeft(2, '0')}:'
                     '${r.time.second.toString().padLeft(2, '0')}';
 
+                final connTypeStr = r.connectionType != null
+                    ? r.connectionType!.toUpperCase()
+                    : 'NO CONNECTION';
+
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
@@ -88,7 +99,7 @@ class _SignalStrengthScreenState extends State<SignalStrengthScreen> {
                           : 'Unavailable',
                       style: theme.textTheme.titleMedium,
                     ),
-                    subtitle: Text(timeStr),
+                    subtitle: Text('$connTypeStr • $timeStr'),
                   ),
                 );
               },
@@ -97,6 +108,10 @@ class _SignalStrengthScreenState extends State<SignalStrengthScreen> {
   }
 
   Widget _signalIcon(int? level, ColorScheme cs) {
+    if (level == null) {
+      return Icon(Icons.signal_cellular_off, size: 32, color: cs.outlineVariant);
+    }
+
     final color = switch (level) {
       4 => Colors.green,
       3 => Colors.lightGreen,
@@ -105,7 +120,6 @@ class _SignalStrengthScreenState extends State<SignalStrengthScreen> {
       0 => Colors.red,
       _ => cs.outlineVariant,
     };
-    level = 0;
     final icon = switch (level) {
       >= 3 => Icons.signal_cellular_alt,
       2 => Icons.signal_cellular_alt_2_bar,
@@ -128,7 +142,12 @@ class _SignalStrengthScreenState extends State<SignalStrengthScreen> {
 }
 
 class _SignalReading {
+  final String? connectionType;
   final int? level;
   final DateTime time;
-  const _SignalReading({required this.level, required this.time});
+  const _SignalReading({
+    required this.connectionType,
+    required this.level,
+    required this.time,
+  });
 }

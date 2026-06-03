@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
@@ -70,7 +71,7 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             try {
                 when (call.method) {
-                    "getSignalStrength" -> result.success(getSignalLevel())
+                    "getSignalStrength" -> result.success(getNetworkAndSignalInfo())
                     else -> result.notImplemented()
                 }
             } catch (e: Throwable) {
@@ -81,20 +82,78 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Returns the overall signal level (0..4) via TelephonyManager (API 28+),
-     * or null if unavailable.
+     * Checks the active network connection type and returns the signal strength level.
+     * 1) Checks internet connectivity.
+     * 2) If disconnected, returns connectionType=null, signalStrength=0.
+     * 3) If WiFi, returns connectionType="wifi", signalStrength=4.
+     * 4) If Cellular, targets the active data SIM and returns signalStrength (0..4).
      */
-    private fun getSignalLevel(): Int? {
-        return try {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+    private fun getNetworkAndSignalInfo(): Map<String, Any?> {
+        try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return mapOf("connectionType" to null, "signalStrength" to 0)
 
-            val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-                ?: return null
+            val activeNetwork = cm.activeNetwork
+            val caps = activeNetwork?.let { cm.getNetworkCapabilities(it) }
 
-            tm.signalStrength?.level  // 0..4 or null
+            val hasInternet = caps?.let {
+                it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            } ?: false
+
+            if (!hasInternet) {
+                return mapOf("connectionType" to null, "signalStrength" to 0)
+            }
+
+            if (caps!!.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                return mapOf("connectionType" to "wifi", "signalStrength" to 4)
+            }
+
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+                    ?: return mapOf("connectionType" to "cellular", "signalStrength" to 0)
+
+                val subId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    SubscriptionManager.getActiveDataSubscriptionId()
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    SubscriptionManager.getDefaultDataSubscriptionId()
+                } else {
+                    SubscriptionManager.INVALID_SUBSCRIPTION_ID
+                }
+
+                val targetedTm = if (subId != SubscriptionManager.INVALID_SUBSCRIPTION_ID && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    tm.createForSubscriptionId(subId)
+                } else {
+                    tm
+                }
+
+                val level = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    try {
+                        targetedTm.signalStrength?.level ?: 0
+                    } catch (e: SecurityException) {
+                        Log.w(TAG, "SecurityException reading signalStrength: ${e.message}")
+                        0
+                    }
+                } else {
+                    0
+                }
+
+                return mapOf(
+                    "connectionType" to "cellular",
+                    "signalStrength" to level
+                )
+            }
+
+            // Fallback for other connections (e.g. Ethernet)
+            val type = when {
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "vpn"
+                else -> "other"
+            }
+            return mapOf("connectionType" to type, "signalStrength" to 4)
+
         } catch (e: Throwable) {
-            Log.e(TAG, "getSignalLevel failed: ${e.message}")
-            null
+            Log.e(TAG, "getNetworkAndSignalInfo failed: ${e.message}")
+            return mapOf("connectionType" to null, "signalStrength" to 0)
         }
     }
 
